@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRCraft — AI Pull Request Description Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); }
+    .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+    .glow { box-shadow: 0 0 30px rgba(99,102,241,0.3); }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+
+  <!-- Header -->
+  <header class="border-b border-white/10 px-6 py-4">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">⚡</span>
+        <span class="text-xl font-bold">PRCraft</span>
+        <span class="text-xs px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Beta</span>
+      </div>
+      <a href="#pricing" class="text-sm text-indigo-300 hover:text-white transition-colors">Pricing</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="max-w-4xl mx-auto px-6 pt-16 pb-10 text-center">
+    <h1 class="text-4xl md:text-5xl font-extrabold mb-4 bg-gradient-to-r from-white to-indigo-300 bg-clip-text text-transparent">
+      Write PR descriptions in 5 seconds
+    </h1>
+    <p class="text-lg text-white/60 max-w-xl mx-auto mb-2">
+      Paste a GitHub PR URL. Get a structured, professional description instantly.
+      No accounts. Your OpenAI key stays in your browser.
+    </p>
+    <p class="text-sm text-indigo-400">🔒 100% client-side — your API key never leaves your device</p>
+  </section>
+
+  <!-- Main App -->
+  <main class="max-w-4xl mx-auto px-6 pb-20">
+
+    <!-- API Key Setup -->
+    <div id="apiKeySection" class="card rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-yellow-400">🔑</span>
+        <h2 class="font-semibold text-sm text-white/80">OpenAI API Key</h2>
+        <span class="text-xs text-white/40">(stored locally, never sent to us)</span>
+      </div>
+      <div class="flex gap-3">
+        <input
+          id="apiKeyInput"
+          type="password"
+          placeholder="sk-..."
+          class="flex-1 bg-white/5 border border-white/20 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <button
+          onclick="saveKey()"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium transition-colors"
+        >Save</button>
+        <button
+          onclick="clearKey()"
+          class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm text-white/60 transition-colors"
+        >Clear</button>
+      </div>
+      <p id="keyStatus" class="text-xs mt-2 text-white/40"></p>
+    </div>
+
+    <!-- PR URL Input -->
+    <div class="card rounded-2xl p-6 mb-6 glow">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-2xl">🔗</span>
+        <h2 class="font-semibold">GitHub PR URL</h2>
+      </div>
+      <div class="flex gap-3 mb-4">
+        <input
+          id="prUrl"
+          type="url"
+          placeholder="https://github.com/owner/repo/pull/123"
+          class="flex-1 bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <button
+          onclick="generateDescription()"
+          id="generateBtn"
+          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Generate ⚡
+        </button>
+      </div>
+
+      <!-- Usage counter -->
+      <div class="flex items-center justify-between text-xs text-white/40">
+        <span id="usageCounter">Loading usage...</span>
+        <span>Free tier: 5 descriptions/day</span>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loadingSection" class="hidden card rounded-2xl p-8 mb-6 text-center">
+      <div class="inline-block w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-white/60 text-sm" id="loadingText">Fetching PR data...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorSection" class="hidden card rounded-2xl p-6 mb-6 border-red-500/30 bg-red-500/5">
+      <div class="flex items-start gap-3">
+        <span class="text-red-400 text-xl">⚠️</span>
+        <div>
+          <p class="font-semibold text-red-300 mb-1">Error</p>
+          <p id="errorText" class="text-sm text-white/60"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="resultSection" class="hidden card rounded-2xl p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-lg flex items-center gap-2">
+          <span>✅</span> Generated Description
+        </h2>
+        <div class="flex gap-2">
+          <button
+            onclick="copyResult()"
+            id="copyBtn"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium transition-colors"
+          >Copy 📋</button>
+          <button
+            onclick="copyMarkdown()"
+            class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm text-white/60 transition-colors"
+          >Copy MD</button>
+        </div>
+      </div>
+
+      <!-- PR meta -->
+      <div id="prMeta" class="flex flex-wrap gap-3 mb-4 text-xs text-white/50"></div>
+
+      <!-- Description -->
+      <div class="bg-white/5 rounded-xl p-5 font-mono text-sm leading-relaxed">
+        <pre id="resultText" class="text-white/90"></pre>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <section id="pricing" class="mt-16">
+      <h2 class="text-2xl font-bold text-center mb-8">Simple Pricing</h2>
+      <div class="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+
+        <div class="card rounded-2xl p-6">
+          <h3 class="font-bold text-lg mb-1">Free</h3>
+          <p class="text-3xl font-extrabold mb-4">$0</p>
+          <ul class="text-sm text-white/60 space-y-2 mb-6">
+            <li>✅ 5 descriptions / day</li>
+            <li>✅ Public repos</li>
+            <li>✅ Your own OpenAI key</li>
+            <li>✅ Copy to clipboard</li>
+          </ul>
+          <button onclick="document.getElementById('prUrl').focus()" class="w-full py-2 border border-white/20 rounded-xl text-sm hover:bg-white/5 transition-colors">
+            Start Free
+          </button>
+        </div>
+
+        <div class="card rounded-2xl p-6 border-indigo-500/40 relative overflow-hidden">
+          <div class="absolute top-3 right-3 text-xs px-2 py-1 bg-indigo-600 rounded-full">Popular</div>
+          <h3 class="font-bold text-lg mb-1">Pro</h3>
+          <p class="text-3xl font-extrabold mb-1">$5<span class="text-lg font-normal text-white/50">/mo</span></p>
+          <p class="text-xs text-white/40 mb-4">Early access — lock in forever</p>
+          <ul class="text-sm text-white/60 space-y-2 mb-6">
+            <li>✅ Unlimited descriptions</li>
+            <li>✅ Private repos (via token)</li>
+            <li>✅ Custom templates</li>
+            <li>✅ Team sharing</li>
+            <li>✅ Priority support</li>
+          </ul>
+          <button onclick="joinWaitlist()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold transition-colors">
+            Join Early Access
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Early access capture -->
+    <div id="waitlistSection" class="hidden max-w-md mx-auto mt-8 card rounded-2xl p-6 text-center">
+      <h3 class="font-semibold mb-3">🎉 Get Early Access</h3>
+      <p class="text-sm text-white/60 mb-4">Lock in $5/mo forever. First 100 spots.</p>
+      <div class="flex gap-2">
+        <input id="waitlistEmail" type="email" placeholder="you@example.com"
+          class="flex-1 bg-white/5 border border-white/20 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-indigo-500" />
+        <button onclick="submitWaitlist()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium transition-colors">
+          Join
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/10 px-6 py-6 text-center text-sm text-white/30">
+    <p>PRCraft — by <a href="https://shiffasultan-collab.github.io/gitdigest-static/" class="text-indigo-400 hover:text-indigo-300">OpenClaw Ventures</a></p>
+    <p class="text-xs mt-1">Your API key is stored locally in your browser and never transmitted to our servers.</p>
+  </footer>
+
+  <script>
+    // ── Constants ──────────────────────────────────────────────────────────────
+    const DAILY_LIMIT = 5;
+    const LS_KEY = 'prcraft_openai_key';
+    const LS_USAGE = 'prcraft_usage';
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved) {
+        document.getElementById('apiKeyInput').value = saved;
+        document.getElementById('keyStatus').textContent = '✅ Key saved';
+      }
+      updateUsageDisplay();
+    });
+
+    // ── API Key ───────────────────────────────────────────────────────────────
+    function saveKey() {
+      const val = document.getElementById('apiKeyInput').value.trim();
+      if (!val.startsWith('sk-')) {
+        document.getElementById('keyStatus').textContent = '⚠️ Key should start with sk-';
+        return;
+      }
+      localStorage.setItem(LS_KEY, val);
+      document.getElementById('keyStatus').textContent = '✅ Key saved locally';
+    }
+
+    function clearKey() {
+      localStorage.removeItem(LS_KEY);
+      document.getElementById('apiKeyInput').value = '';
+      document.getElementById('keyStatus').textContent = 'Key cleared';
+    }
+
+    // ── Usage tracking ────────────────────────────────────────────────────────
+    function getUsage() {
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const data = JSON.parse(localStorage.getItem(LS_USAGE) || '{}');
+        return data.date === today ? (data.count || 0) : 0;
+      } catch { return 0; }
+    }
+
+    function incrementUsage() {
+      const today = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(LS_USAGE, JSON.stringify({ date: today, count: getUsage() + 1 }));
+      updateUsageDisplay();
+    }
+
+    function updateUsageDisplay() {
+      const used = getUsage();
+      const remaining = DAILY_LIMIT - used;
+      const el = document.getElementById('usageCounter');
+      if (remaining <= 0) {
+        el.textContent = '⚠️ Daily limit reached (5/5). Upgrade to Pro for unlimited.';
+        el.classList.add('text-red-400');
+      } else {
+        el.textContent = `${used}/${DAILY_LIMIT} used today (${remaining} remaining)`;
+      }
+    }
+
+    // ── Parse PR URL ──────────────────────────────────────────────────────────
+    function parsePrUrl(url) {
+      const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+      if (!match) return null;
+      return { owner: match[1], repo: match[2], number: match[3] };
+    }
+
+    // ── Main generate ─────────────────────────────────────────────────────────
+    async function generateDescription() {
+      const url = document.getElementById('prUrl').value.trim();
+      const apiKey = localStorage.getItem(LS_KEY);
+
+      // Validations
+      if (!url) return showError('Please enter a GitHub PR URL.');
+      if (!apiKey) return showError('Please save your OpenAI API key first.');
+      if (getUsage() >= DAILY_LIMIT) return showError('Daily limit reached. Upgrade to Pro for unlimited descriptions.');
+
+      const pr = parsePrUrl(url);
+      if (!pr) return showError('Invalid URL. Expected format: https://github.com/owner/repo/pull/123');
+
+      // UI: loading
+      setLoading(true, 'Fetching PR data from GitHub...');
+      hideError(); hideResult();
+
+      try {
+        // 1. Fetch PR metadata
+        const prRes = await fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`);
+        if (!prRes.ok) {
+          if (prRes.status === 404) throw new Error('PR not found. Make sure the repo is public and the PR exists.');
+          if (prRes.status === 403) throw new Error('GitHub API rate limit hit. Wait a minute and try again.');
+          throw new Error(`GitHub API error: ${prRes.status}`);
+        }
+        const prData = await prRes.json();
+
+        setLoading(true, 'Fetching commit messages...');
+
+        // 2. Fetch commits
+        const commitsRes = await fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/commits`);
+        const commits = commitsRes.ok ? await commitsRes.json() : [];
+        const commitMessages = commits.slice(0, 20).map(c => `- ${c.commit.message.split('\n')[0]}`).join('\n');
+
+        setLoading(true, 'Fetching changed files...');
+
+        // 3. Fetch files changed
+        const filesRes = await fetch(`https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/files`);
+        const files = filesRes.ok ? await filesRes.json() : [];
+        const filesSummary = files.slice(0, 30).map(f => `${f.status}: ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n');
+
+        setLoading(true, 'Generating description with AI...');
+
+        // 4. OpenAI call
+        const prompt = `You are a senior software engineer. Generate a clear, professional GitHub Pull Request description.
+
+PR Title: ${prData.title}
+Branch: ${prData.head.ref} → ${prData.base.ref}
+Author: ${prData.user.login}
+Commits: ${commits.length}
+Files changed: ${files.length} (+${prData.additions || 0}/-${prData.deletions || 0})
+
+Commit messages:
+${commitMessages || '(none available)'}
+
+Files changed:
+${filesSummary || '(none available)'}
+
+Existing PR body (if any):
+${prData.body || '(empty)'}
+
+Generate a structured PR description with these sections:
+## Summary
+(1-2 sentences: what does this PR do and why)
+
+## Changes
+(bullet list of key changes)
+
+## Why
+(motivation, context, or problem being solved)
+
+## Testing
+(how to test or verify this change)
+
+Keep it concise, technical, and useful. No fluff.`;
+
+        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 600,
+            temperature: 0.4
+          })
+        });
+
+        if (!aiRes.ok) {
+          const err = await aiRes.json().catch(() => ({}));
+          throw new Error(err.error?.message || `OpenAI error: ${aiRes.status}`);
+        }
+
+        const aiData = await aiRes.json();
+        const description = aiData.choices[0].message.content.trim();
+
+        // 5. Show result
+        incrementUsage();
+        setLoading(false);
+        showResult(description, prData, files.length, commits.length);
+
+      } catch (err) {
+        setLoading(false);
+        showError(err.message);
+      }
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────────────
+    function setLoading(show, text = '') {
+      document.getElementById('loadingSection').classList.toggle('hidden', !show);
+      document.getElementById('loadingText').textContent = text;
+      const btn = document.getElementById('generateBtn');
+      btn.disabled = show;
+      btn.textContent = show ? 'Working...' : 'Generate ⚡';
+    }
+
+    function showError(msg) {
+      document.getElementById('errorSection').classList.remove('hidden');
+      document.getElementById('errorText').textContent = msg;
+    }
+
+    function hideError() {
+      document.getElementById('errorSection').classList.add('hidden');
+    }
+
+    function showResult(description, prData, fileCount, commitCount) {
+      document.getElementById('resultSection').classList.remove('hidden');
+      document.getElementById('resultText').textContent = description;
+
+      document.getElementById('prMeta').innerHTML = `
+        <span class="px-2 py-1 bg-white/5 rounded-lg">📁 ${fileCount} files</span>
+        <span class="px-2 py-1 bg-white/5 rounded-lg">📝 ${commitCount} commits</span>
+        <span class="px-2 py-1 bg-white/5 rounded-lg">👤 ${prData.user.login}</span>
+        <span class="px-2 py-1 bg-white/5 rounded-lg">${prData.head.ref} → ${prData.base.ref}</span>
+      `;
+    }
+
+    function hideResult() {
+      document.getElementById('resultSection').classList.add('hidden');
+    }
+
+    function copyResult() {
+      const text = document.getElementById('resultText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => btn.textContent = 'Copy 📋', 2000);
+      });
+    }
+
+    function copyMarkdown() {
+      const text = document.getElementById('resultText').textContent;
+      navigator.clipboard.writeText(text);
+    }
+
+    // ── Waitlist ──────────────────────────────────────────────────────────────
+    function joinWaitlist() {
+      document.getElementById('waitlistSection').classList.remove('hidden');
+      document.getElementById('waitlistSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function submitWaitlist() {
+      const email = document.getElementById('waitlistEmail').value.trim();
+      if (!email || !email.includes('@')) return;
+      // Store locally for now (no backend needed yet)
+      const waitlist = JSON.parse(localStorage.getItem('prcraft_waitlist') || '[]');
+      waitlist.push({ email, ts: new Date().toISOString() });
+      localStorage.setItem('prcraft_waitlist', JSON.stringify(waitlist));
+      document.getElementById('waitlistSection').innerHTML = `
+        <div class="text-center py-4">
+          <p class="text-2xl mb-2">🎉</p>
+          <p class="font-semibold">You're on the list!</p>
+          <p class="text-sm text-white/50 mt-1">We'll email you when Pro launches. Locked in at $5/mo.</p>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
